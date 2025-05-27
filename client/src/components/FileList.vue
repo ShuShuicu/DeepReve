@@ -3,14 +3,19 @@ import { ref, onMounted } from 'vue';
 import { message } from 'ant-design-vue';
 import { FolderOutlined, FileOutlined, DownloadOutlined } from '@ant-design/icons-vue';
 
-const baseURL = '/API/getFileList';
-const downloadURL = '/API/getFileDownload';
+const baseURL = 'http://deepreve-server.localhost:91/API/getFileList';
+const downloadURL = 'http://deepreve-server.localhost:91/API/getFileDownload';
 
 const fileList = ref([]);
 const currentFile = ref(null);
 const visible = ref(false);
 const loading = ref(false);
 const activeKeys = ref([]);
+
+// 生成唯一key（使用完整路径）
+const generateKey = (path) => {
+  return path.replace(/\//g, '|');
+};
 
 // 获取文件列表
 const fetchFileList = async () => {
@@ -20,15 +25,32 @@ const fetchFileList = async () => {
         const data = await response.json();
 
         if (data.success) {
+            // 处理文件夹数据
             fileList.value = data.data.folders.map(folder => ({
                 ...folder,
                 isFolder: true,
-                loaded: !!folder.items
+                loaded: !!folder.items,
+                key: generateKey(folder.name),
+                items: folder.items ? {
+                    folders: folder.items.folders.map(subFolder => ({
+                        ...subFolder,
+                        isFolder: true,
+                        loaded: !!subFolder.items,
+                        key: generateKey(`${folder.name}/${subFolder.name}`)
+                    })),
+                    files: folder.items.files.map(file => ({
+                        ...file,
+                        isFolder: false,
+                        key: generateKey(`${folder.name}/${file.name}`)
+                    }))
+                } : null
             }));
 
+            // 处理根目录文件
             fileList.value.push(...data.data.files.map(file => ({
                 ...file,
-                isFolder: false
+                isFolder: false,
+                key: generateKey(file.name)
             })));
         }
     } catch (error) {
@@ -39,43 +61,51 @@ const fetchFileList = async () => {
 };
 
 // 获取文件夹内容
-const fetchFolderContent = async (folder) => {
+const fetchFolderContent = async (folderPath, folderKey) => {
     try {
-        if (folder.items) {
-            const index = fileList.value.findIndex(item => 
-                item.isFolder && item.name === folder.name
-            );
-            if (index !== -1) {
-                fileList.value[index].loaded = true;
-            }
-            return;
-        }
-
-        const response = await fetch(`${baseURL}?path=${encodeURIComponent(folder.name)}`);
+        const response = await fetch(`${baseURL}?path=${encodeURIComponent(folderPath)}`);
         const data = await response.json();
 
         if (data.success) {
-            const index = fileList.value.findIndex(item =>
-                item.isFolder && item.name === folder.name
-            );
+            // 更新文件列表中的对应文件夹
+            const updateFolderItems = (items) => {
+                return items.map(item => {
+                    if (item.key === folderKey) {
+                        return {
+                            ...item,
+                            loaded: true,
+                            items: {
+                                folders: data.data.folders.map(subFolder => ({
+                                    ...subFolder,
+                                    isFolder: true,
+                                    loaded: false,
+                                    key: generateKey(`${folderPath}/${subFolder.name}`)
+                                })),
+                                files: data.data.files.map(file => ({
+                                    ...file,
+                                    isFolder: false,
+                                    key: generateKey(`${folderPath}/${file.name}`)
+                                }))
+                            }
+                        };
+                    }
+                    if (item.isFolder && item.items) {
+                        return {
+                            ...item,
+                            items: {
+                                ...item.items,
+                                folders: updateFolderItems(item.items.folders)
+                            }
+                        };
+                    }
+                    return item;
+                });
+            };
 
-            if (index !== -1) {
-                fileList.value[index].items = {
-                    folders: data.data.folders.map(f => ({ 
-                        ...f, 
-                        isFolder: true, 
-                        loaded: false
-                    })),
-                    files: data.data.files.map(f => ({ 
-                        ...f, 
-                        isFolder: false
-                    }))
-                };
-                fileList.value[index].loaded = true;
-            }
+            fileList.value = updateFolderItems(fileList.value);
         }
     } catch (error) {
-        message.error('获取文件夹内容失败: ' + error.message);
+        message.error(`获取文件夹 ${folderPath} 内容失败: ` + error.message);
     }
 };
 
@@ -84,9 +114,25 @@ const handlePanelChange = (keys) => {
     activeKeys.value = keys;
     if (keys.length > 0) {
         const lastKey = keys[keys.length - 1];
-        const folder = fileList.value.find(item => item.isFolder && item.name === lastKey);
+        const folderPath = lastKey.replace(/\|/g, '/');
+        
+        // 查找未加载的文件夹
+        const findUnloadedFolder = (items) => {
+            for (const item of items) {
+                if (item.key === lastKey && item.isFolder && !item.loaded) {
+                    return item;
+                }
+                if (item.isFolder && item.items) {
+                    const found = findUnloadedFolder(item.items.folders);
+                    if (found) return found;
+                }
+            }
+            return null;
+        };
+        
+        const folder = findUnloadedFolder(fileList.value);
         if (folder) {
-            fetchFolderContent(folder);
+            fetchFolderContent(folderPath, lastKey);
         }
     }
 };
@@ -126,32 +172,58 @@ onMounted(() => {
 </script>
 
 <template>
+    <div class="file-manager-container">
         <a-spin :spinning="loading">
-            <a-collapse v-model:activeKey="activeKeys" @change="handlePanelChange">
-                <template v-for="item in fileList" :key="item.name">
+            <!-- 主折叠面板 -->
+            <a-collapse v-model:activeKey="activeKeys" @change="handlePanelChange" accordion>
+                <!-- 递归渲染文件夹结构 -->
+                <template v-for="item in fileList" :key="item.key">
+                    <!-- 文件夹项 -->
                     <a-collapse-panel 
                         v-if="item.isFolder" 
-                        :key="item.name"
+                        :key="item.key"
                     >
                         <template #header>
                             <FolderOutlined style="margin-right: 8px; color: #1890ff;" />
                             {{ item.name }}
                         </template>
                         
+                        <!-- 文件夹内容 -->
                         <div v-if="item.loaded && item.items" class="folder-content">
-                            <div 
-                                v-for="subFolder in item.items.folders" 
-                                :key="subFolder.name" 
-                                class="folder-item"
-                                @click.stop=""
-                            >
-                                <FolderOutlined style="margin-right: 8px; color: #1890ff;" />
-                                <span>{{ subFolder.name }}</span>
-                            </div>
+                            <!-- 子文件夹 -->
+                            <a-collapse v-model:activeKey="activeKeys" @change="handlePanelChange">
+                                <a-collapse-panel 
+                                    v-for="subFolder in item.items.folders" 
+                                    :key="subFolder.key"
+                                >
+                                    <template #header>
+                                        <FolderOutlined style="margin-right: 8px; color: #1890ff;" />
+                                        {{ subFolder.name }}
+                                    </template>
+                                    
+                                    <div v-if="subFolder.loaded && subFolder.items" class="folder-content">
+                                        <!-- 这里可以继续递归渲染更深层级的文件夹和文件 -->
+                                        <div 
+                                            v-for="file in subFolder.items.files" 
+                                            :key="file.key" 
+                                            class="file-item"
+                                            @click.stop="handleFileClick(file)"
+                                        >
+                                            <FileOutlined style="margin-right: 8px;" />
+                                            <span>{{ file.name }}</span>
+                                        </div>
+                                    </div>
+                                    
+                                    <div v-else class="loading-placeholder">
+                                        <a-spin size="small" />
+                                    </div>
+                                </a-collapse-panel>
+                            </a-collapse>
                             
+                            <!-- 当前文件夹下的文件 -->
                             <div 
                                 v-for="file in item.items.files" 
-                                :key="file.name" 
+                                :key="file.key" 
                                 class="file-item"
                                 @click.stop="handleFileClick(file)"
                             >
@@ -172,6 +244,7 @@ onMounted(() => {
                         </div>
                     </a-collapse-panel>
                     
+                    <!-- 文件项 -->
                     <div 
                         v-else 
                         class="file-item top-level-file"
@@ -184,6 +257,7 @@ onMounted(() => {
             </a-collapse>
         </a-spin>
 
+        <!-- 文件详情对话框 -->
         <a-modal 
             v-model:visible="visible" 
             :title="currentFile?.name || '文件详情'"
@@ -214,9 +288,15 @@ onMounted(() => {
                 </div>
             </div>
         </a-modal>
+    </div>
 </template>
 
 <style scoped>
+.file-manager-container {
+    padding: 20px;
+    background: #fff;
+    border-radius: 4px;
+}
 
 .folder-content {
     padding-left: 24px;
