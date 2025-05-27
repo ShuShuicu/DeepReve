@@ -14,7 +14,7 @@ define('ANON_DB_DATABASE', 'deepreve');
 define('ANON_DB_CHARSET', 'utf8mb4');
 
 // 是否安装程序
-define('ANON_INSTALLED', true);
+define('ANON_INSTALLED', false);
 
 // 站点配置
 $AnonSite = [
