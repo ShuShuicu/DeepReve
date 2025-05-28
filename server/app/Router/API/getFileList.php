@@ -22,7 +22,7 @@ class DirectoryScanner
         return $this->scanDirectory($this->rootDir, '');
     }
 
-    private function scanDirectory($dir, $parentName)
+    private function scanDirectory($dir, $pathPrefix)
     {
         $result = [
             'folders' => [],
@@ -42,19 +42,16 @@ class DirectoryScanner
                     'name' => $item,
                     'type' => 'folder',
                     'modified' => $this->formatDate(filemtime($path)),
-                    'items' => $this->scanDirectory($path, $item)
+                    'items' => $this->scanDirectory($path, $pathPrefix . $item . '/')
                 ];
             } else {
                 $stats = $this->db->getFileStats($path);
-                
-                // 生成dir字段：如果有父文件夹则用"父文件夹/文件名"，否则直接文件名
-                $dirField = $parentName ? $parentName . '/' . $item : $item;
                 
                 $result['files'][] = [
                     'name' => $item,
                     'type' => $this->getFileType($item),
                     'size' => $this->formatSize(filesize($path)),
-                    'dir' => $dirField,
+                    'dir' => $pathPrefix . $item, // 完整相对路径
                     'bytes' => filesize($path),
                     'modified' => $this->formatDate(filemtime($path)),
                     'extension' => pathinfo($item, PATHINFO_EXTENSION),
@@ -140,7 +137,7 @@ class DirectoryScanner
     }
 }
 
-// 使用示例
+
 try {
     $scanner = new DirectoryScanner($DeepReve['upload']['baseDir']);
     echo $scanner->getJsonResult();

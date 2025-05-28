@@ -3,8 +3,8 @@ import { ref, onMounted } from 'vue';
 import { message } from 'ant-design-vue';
 import { FolderOutlined, FileOutlined, DownloadOutlined } from '@ant-design/icons-vue';
 
-const baseURL = 'http://deepreve-server.localhost:91/API/getFileList';
-const downloadURL = 'http://deepreve-server.localhost:91/API/getFileDownload';
+const baseURL = '/API/getFileList';
+const downloadURL = '/API/getFileDownload';
 
 const fileList = ref([]);
 const currentFile = ref(null);

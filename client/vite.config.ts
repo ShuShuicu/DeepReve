@@ -83,7 +83,9 @@ export default defineConfig({
   },
 
   // 构建配置
+  base: './',
   build: {
+    assetsDir: 'assets',
     chunkSizeWarningLimit: 2000,          // 增大chunk大小警告限制
     rollupOptions: {
       output: {
