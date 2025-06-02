@@ -9,9 +9,9 @@ if (!defined('ANON_ALLOWED_ACCESS')) exit;
     <link rel="icon" href="app/favicon.ico">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DeepReve</title>
-    <script type="module" crossorigin src="./app/Assets/index-B4S1nFSM.js"></script>
+    <script type="module" crossorigin src="./app/Assets/index-CGLjPV-n.js"></script>
     <link rel="modulepreload" crossorigin href="./app/Assets/vue-vendor-CbxJKePr.js">
-    <link rel="stylesheet" crossorigin href="./app/Assets/index-DkaNmzrL.css">
+    <link rel="stylesheet" crossorigin href="./app/Assets/index-2aXczOjs.css">
 
 <body>
     <div id="app"></div>
