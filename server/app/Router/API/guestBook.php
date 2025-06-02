@@ -12,10 +12,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit(0);
 }
 
+/**
+ * 获取客户端真实IP
+ * @return string
+ */
+function getClientIp() {
+    $ip = '';
+    
+    // 检查HTTP_CLIENT_IP头
+    if (!empty($_SERVER['HTTP_CLIENT_IP'])) {
+        $ip = $_SERVER['HTTP_CLIENT_IP'];
+    } 
+    // 检查HTTP_X_FORWARDED_FOR头
+    // 包含多个IP时取第一个
+    elseif (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+        $ips = explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']);
+        $ip = trim($ips[0]);
+    } 
+    // 最后使用REMOTE_ADDR
+    else {
+        $ip = $_SERVER['REMOTE_ADDR'];
+    }
+    
+    // 验证IP格式
+    return filter_var($ip, FILTER_VALIDATE_IP) ? $ip : '0.0.0.0';
+}
+
 try {
     $db = new Anon_Database();
     
-    // 处理POST请求 - 提交留言
+    // 处理POST请求
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // 获取输入数据
         $input = json_decode(file_get_contents('php://input'), true);
@@ -43,7 +69,7 @@ try {
         }
         
         // 获取客户端信息
-        $ip = $_SERVER['REMOTE_ADDR'];
+        $ip = getClientIp();
         $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
         
         // 添加留言
@@ -61,7 +87,7 @@ try {
         exit;
     }
     
-    // 处理GET请求 - 获取留言列表
+    // 获取留言列表
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 10;
         $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
