@@ -7,7 +7,6 @@ CREATE TABLE IF NOT EXISTS `{prefix}file_downloads` (
     `ip_address` VARCHAR(45) NOT NULL COMMENT '下载者IP',
     `user_agent` TEXT COMMENT '用户浏览器UA',
     `download_time` DATETIME NOT NULL COMMENT '下载时间',
-    `user_id` INT UNSIGNED DEFAULT NULL COMMENT '用户ID(如果登录)'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='文件下载记录表';
 
 -- 创建文件下载统计表
