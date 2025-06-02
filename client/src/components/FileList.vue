@@ -14,7 +14,28 @@ const activeKeys = ref([]);
 
 // 生成唯一key（使用完整路径）
 const generateKey = (path) => {
-  return path.replace(/\//g, '|');
+    return path.replace(/\//g, '|');
+};
+
+// 递归处理文件夹数据
+const processFolderData = (folder, parentPath = '') => {
+    const currentPath = parentPath ? `${parentPath}/${folder.name}` : folder.name;
+    return {
+        ...folder,
+        isFolder: true,
+        loaded: !!folder.items,
+        key: generateKey(currentPath),
+        items: folder.items ? {
+            folders: folder.items.folders.map(subFolder => 
+                processFolderData(subFolder, currentPath)
+            ),  // 注意这里的逗号
+            files: folder.items.files.map(file => ({
+                ...file,
+                isFolder: false,
+                key: generateKey(`${currentPath}/${file.name}`)
+            }))
+        } : null
+    };
 };
 
 // 获取文件列表
@@ -25,26 +46,10 @@ const fetchFileList = async () => {
         const data = await response.json();
 
         if (data.success) {
-            // 处理文件夹数据
-            fileList.value = data.data.folders.map(folder => ({
-                ...folder,
-                isFolder: true,
-                loaded: !!folder.items,
-                key: generateKey(folder.name),
-                items: folder.items ? {
-                    folders: folder.items.folders.map(subFolder => ({
-                        ...subFolder,
-                        isFolder: true,
-                        loaded: !!subFolder.items,
-                        key: generateKey(`${folder.name}/${subFolder.name}`)
-                    })),
-                    files: folder.items.files.map(file => ({
-                        ...file,
-                        isFolder: false,
-                        key: generateKey(`${folder.name}/${file.name}`)
-                    }))
-                } : null
-            }));
+            // 处理文件夹数据 - 使用递归处理所有层级
+            fileList.value = data.data.folders.map(folder => 
+                processFolderData(folder)
+            );
 
             // 处理根目录文件
             fileList.value.push(...data.data.files.map(file => ({
@@ -67,7 +72,7 @@ const fetchFolderContent = async (folderPath, folderKey) => {
         const data = await response.json();
 
         if (data.success) {
-            // 更新文件列表中的对应文件夹
+            // 递归更新文件列表中的对应文件夹
             const updateFolderItems = (items) => {
                 return items.map(item => {
                     if (item.key === folderKey) {
@@ -75,12 +80,9 @@ const fetchFolderContent = async (folderPath, folderKey) => {
                             ...item,
                             loaded: true,
                             items: {
-                                folders: data.data.folders.map(subFolder => ({
-                                    ...subFolder,
-                                    isFolder: true,
-                                    loaded: false,
-                                    key: generateKey(`${folderPath}/${subFolder.name}`)
-                                })),
+                                folders: data.data.folders.map(subFolder => 
+                                    processFolderData(subFolder, folderPath)
+                                ),
                                 files: data.data.files.map(file => ({
                                     ...file,
                                     isFolder: false,
@@ -115,8 +117,8 @@ const handlePanelChange = (keys) => {
     if (keys.length > 0) {
         const lastKey = keys[keys.length - 1];
         const folderPath = lastKey.replace(/\|/g, '/');
-        
-        // 查找未加载的文件夹
+
+        // 递归查找未加载的文件夹
         const findUnloadedFolder = (items) => {
             for (const item of items) {
                 if (item.key === lastKey && item.isFolder && !item.loaded) {
@@ -129,7 +131,7 @@ const handlePanelChange = (keys) => {
             }
             return null;
         };
-        
+
         const folder = findUnloadedFolder(fileList.value);
         if (folder) {
             fetchFolderContent(folderPath, lastKey);
@@ -149,13 +151,13 @@ const downloadFile = (file) => {
         message.error('无法获取文件路径');
         return;
     }
-    
+
     // 创建隐藏iframe触发下载
     const iframe = document.createElement('iframe');
     iframe.style.display = 'none';
     iframe.src = `${downloadURL}?name=${encodeURIComponent(file.dir)}`;
     document.body.appendChild(iframe);
-    
+
     // 更新本地显示
     setTimeout(() => {
         if (currentFile.value && currentFile.value.dir === file.dir) {
@@ -179,77 +181,80 @@ onMounted(() => {
                 <!-- 递归渲染文件夹结构 -->
                 <template v-for="item in fileList" :key="item.key">
                     <!-- 文件夹项 -->
-                    <a-collapse-panel 
-                        v-if="item.isFolder" 
-                        :key="item.key"
-                    >
+                    <a-collapse-panel v-if="item.isFolder" :key="item.key">
                         <template #header>
                             <FolderOutlined style="margin-right: 8px; color: #1890ff;" />
                             {{ item.name }}
                         </template>
-                        
+
                         <!-- 文件夹内容 -->
                         <div v-if="item.loaded && item.items" class="folder-content">
-                            <!-- 子文件夹 -->
+                            <!-- 子文件夹 - 递归渲染 -->
                             <a-collapse v-model:activeKey="activeKeys" @change="handlePanelChange">
-                                <a-collapse-panel 
-                                    v-for="subFolder in item.items.folders" 
-                                    :key="subFolder.key"
-                                >
+                                <a-collapse-panel v-for="subFolder in item.items.folders" :key="subFolder.key">
                                     <template #header>
                                         <FolderOutlined style="margin-right: 8px; color: #1890ff;" />
                                         {{ subFolder.name }}
                                     </template>
-                                    
+
                                     <div v-if="subFolder.loaded && subFolder.items" class="folder-content">
-                                        <!-- 这里可以继续递归渲染更深层级的文件夹和文件 -->
-                                        <div 
-                                            v-for="file in subFolder.items.files" 
-                                            :key="file.key" 
-                                            class="file-item"
-                                            @click.stop="handleFileClick(file)"
-                                        >
+                                        <!-- 递归渲染更深层级的文件夹 -->
+                                        <a-collapse v-model:activeKey="activeKeys" @change="handlePanelChange">
+                                            <a-collapse-panel v-for="deepFolder in subFolder.items.folders" :key="deepFolder.key">
+                                                <template #header>
+                                                    <FolderOutlined style="margin-right: 8px; color: #1890ff;" />
+                                                    {{ deepFolder.name }}
+                                                </template>
+                                                
+                                                <div v-if="deepFolder.loaded && deepFolder.items" class="folder-content">
+                                                    <!-- 这里可以继续递归或直接显示文件 -->
+                                                    <div v-for="file in deepFolder.items.files" :key="file.key" class="file-item"
+                                                        @click.stop="handleFileClick(file)">
+                                                        <FileOutlined style="margin-right: 8px;" />
+                                                        <span>{{ file.name }}</span>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div v-else class="loading-placeholder">
+                                                    <a-spin size="small" />
+                                                </div>
+                                            </a-collapse-panel>
+                                        </a-collapse>
+
+                                        <!-- 当前子文件夹下的文件 -->
+                                        <div v-for="file in subFolder.items.files" :key="file.key" class="file-item"
+                                            @click.stop="handleFileClick(file)">
                                             <FileOutlined style="margin-right: 8px;" />
                                             <span>{{ file.name }}</span>
                                         </div>
                                     </div>
-                                    
+
                                     <div v-else class="loading-placeholder">
                                         <a-spin size="small" />
                                     </div>
                                 </a-collapse-panel>
                             </a-collapse>
-                            
+
                             <!-- 当前文件夹下的文件 -->
-                            <div 
-                                v-for="file in item.items.files" 
-                                :key="file.key" 
-                                class="file-item"
-                                @click.stop="handleFileClick(file)"
-                            >
+                            <div v-for="file in item.items.files" :key="file.key" class="file-item"
+                                @click.stop="handleFileClick(file)">
                                 <FileOutlined style="margin-right: 8px;" />
                                 <span>{{ file.name }}</span>
                             </div>
-                            
-                            <div 
-                                v-if="item.items.folders.length === 0 && item.items.files.length === 0"
-                                class="empty-folder"
-                            >
+
+                            <div v-if="item.items.folders.length === 0 && item.items.files.length === 0"
+                                class="empty-folder">
                                 空文件夹
                             </div>
                         </div>
-                        
+
                         <div v-else class="loading-placeholder">
                             <a-spin size="small" />
                         </div>
                     </a-collapse-panel>
-                    
+
                     <!-- 文件项 -->
-                    <div 
-                        v-else 
-                        class="file-item top-level-file"
-                        @click="handleFileClick(item)"
-                    >
+                    <div v-else class="file-item top-level-file" @click="handleFileClick(item)">
                         <FileOutlined style="margin-right: 8px;" />
                         <span>{{ item.name }}</span>
                     </div>
@@ -258,12 +263,7 @@ onMounted(() => {
         </a-spin>
 
         <!-- 文件详情对话框 -->
-        <a-modal 
-            v-model:visible="visible" 
-            :title="currentFile?.name || '文件详情'"
-            width="600px"
-            :footer="null"
-        >
+        <a-modal v-model:visible="visible" :title="currentFile?.name || '文件详情'" width="600px" :footer="null">
             <div v-if="currentFile" class="file-detail">
                 <a-descriptions bordered :column="1">
                     <a-descriptions-item label="文件名">{{ currentFile.name }}</a-descriptions-item>
@@ -276,12 +276,9 @@ onMounted(() => {
                         {{ currentFile.last_download_time || '从未下载' }}
                     </a-descriptions-item>
                 </a-descriptions>
-                
+
                 <div class="download-btn-container">
-                    <a-button 
-                        type="primary" 
-                        @click="downloadFile(currentFile)"
-                    >
+                    <a-button type="primary" @click="downloadFile(currentFile)">
                         <DownloadOutlined />
                         下载文件
                     </a-button>
@@ -302,7 +299,8 @@ onMounted(() => {
     padding-left: 24px;
 }
 
-.file-item, .folder-item {
+.file-item,
+.folder-item {
     padding: 8px 0;
     cursor: pointer;
     transition: all 0.3s;
