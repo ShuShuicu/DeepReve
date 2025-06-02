@@ -47,17 +47,15 @@ if (!in_array($extension, $allowedExtensions)) {
 try {
     $db = new Anon_Database();
     
-    // 获取用户ID(如果有登录)
-    $userId = isset($_SESSION['user_id']) ? $_SESSION['user_id'] : null;
+    // 获取客户端真实IP
+    $clientIP = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'];
     
-    // 记录下载
     $db->logFileDownload(
         $filePath,
         basename($filePath),
         filesize($filePath),
-        $_SERVER['REMOTE_ADDR'],
-        $_SERVER['HTTP_USER_AGENT'],
-        $userId
+        $clientIP,
+        $_SERVER['HTTP_USER_AGENT']
     );
     
     // 更新统计
