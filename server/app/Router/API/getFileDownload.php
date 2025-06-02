@@ -7,7 +7,7 @@ $baseDir = $DeepReve['upload']['baseDir'];
 $allowedExtensions = $DeepReve['upload']['allowedExtensions'];
 
 // 获取请求的文件名
-$requestedFile = isset($_GET['name']) ? $_GET['name'] : '';
+$requestedFile = $_GET['name'] ?? '';
 
 // 安全验证
 if (empty($requestedFile)) {
@@ -18,11 +18,9 @@ if (empty($requestedFile)) {
 
 // 解码并清理路径
 $requestedFile = urldecode($requestedFile);
-$requestedFile = rawurldecode($requestedFile); // 双重解码确保
+$requestedFile = rawurldecode($requestedFile);
 $requestedFile = ltrim($requestedFile, '/');
-$requestedFile = str_replace(['../', '..\\'], '', $requestedFile); // 防止目录遍历攻击
-
-// 确保文件名是正确的UTF-8编码
+$requestedFile = str_replace(['../', '..\\'], '', $requestedFile);
 $requestedFile = mb_convert_encoding($requestedFile, 'UTF-8', 'UTF-8');
 
 // 构建完整路径
@@ -46,8 +44,6 @@ if (!in_array($extension, $allowedExtensions)) {
 // 记录下载信息
 try {
     $db = new Anon_Database();
-    
-    // 获取客户端真实IP
     $clientIP = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'];
     
     $db->logFileDownload(
@@ -55,28 +51,27 @@ try {
         basename($filePath),
         filesize($filePath),
         $clientIP,
-        $_SERVER['HTTP_USER_AGENT']
+        $_SERVER['HTTP_USER_AGENT'] ?? ''
     );
     
-    // 更新统计
     $db->updateFileStats($filePath);
 } catch (Exception $e) {
-    // 记录错误但不中断下载
     error_log("Failed to log download: " . $e->getMessage());
 }
 
-// 设置下载头
-header("Access-Control-Allow-Origin: *");
-header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
-header('Content-Description: File Transfer');
+// 关键修改点：简化响应头设置
+header_remove(); // 清除所有现有头
+
+// 仅设置必要的下载头
 header('Content-Type: application/octet-stream');
-header('Content-Disposition: attachment; filename*=UTF-8\'\'' . rawurlencode(basename($filePath)));
-header('Expires: 0');
-header('Cache-Control: must-revalidate');
-header('Pragma: public');
+header('Content-Disposition: attachment; filename="' . basename($filePath) . '"');
 header('Content-Length: ' . filesize($filePath));
 
-// 清空输出缓冲区
-flush();
+// 禁用缓存
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
+
+// 输出文件
 readfile($filePath);
 exit;
