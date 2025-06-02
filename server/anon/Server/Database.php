@@ -82,26 +82,24 @@ class Anon_Database
      * @param int $fileSize 文件大小
      * @param string $ip IP地址
      * @param string $userAgent 用户代理
-     * @param int|null $userId 用户ID(可选)
      * @return bool 是否成功
      */
-    public function logFileDownload($filePath, $fileName, $fileSize, $ip, $userAgent, $userId = null)
-    {
-        $sql = "INSERT INTO " . ANON_DB_PREFIX . "file_downloads 
-            (file_path, file_name, file_size, ip_address, user_agent, download_time, user_id) 
-            VALUES (?, ?, ?, ?, ?, NOW(), ?)";
+public function logFileDownload($filePath, $fileName, $fileSize, $ip, $userAgent)
+{
+    $sql = "INSERT INTO " . ANON_DB_PREFIX . "file_downloads 
+        (file_path, file_name, file_size, ip_address, user_agent, download_time) 
+        VALUES (?, ?, ?, ?, ?, NOW())";
 
-        $stmt = $this->prepare($sql, [
-            $filePath,
-            $fileName,
-            $fileSize,
-            $ip,
-            $userAgent,
-            $userId
-        ]);
+    $stmt = $this->prepare($sql, [
+        $filePath,
+        $fileName,
+        $fileSize,
+        $ip,
+        $userAgent
+    ]);
 
-        return $stmt->affected_rows > 0;
-    }
+    return $stmt->affected_rows > 0;
+}
 
     /**
      * 获取文件下载统计
