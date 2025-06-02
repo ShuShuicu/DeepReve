@@ -18,8 +18,12 @@ if (empty($requestedFile)) {
 
 // 解码并清理路径
 $requestedFile = urldecode($requestedFile);
+$requestedFile = rawurldecode($requestedFile); // 双重解码确保
 $requestedFile = ltrim($requestedFile, '/');
 $requestedFile = str_replace(['../', '..\\'], '', $requestedFile); // 防止目录遍历攻击
+
+// 确保文件名是正确的UTF-8编码
+$requestedFile = mb_convert_encoding($requestedFile, 'UTF-8', 'UTF-8');
 
 // 构建完整路径
 $filePath = $baseDir . DIRECTORY_SEPARATOR . $requestedFile;
@@ -68,7 +72,7 @@ header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
 header('Content-Description: File Transfer');
 header('Content-Type: application/octet-stream');
-header('Content-Disposition: attachment; filename="' . basename($filePath) . '"');
+header('Content-Disposition: attachment; filename*=UTF-8\'\'' . rawurlencode(basename($filePath)));
 header('Expires: 0');
 header('Cache-Control: must-revalidate');
 header('Pragma: public');
